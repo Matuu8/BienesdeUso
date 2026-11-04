@@ -534,8 +534,7 @@
   .photo-btn { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: transparent; transition: background .2s, color .2s; color: var(--ink-soft); }
   .photo-btn:hover { background: rgba(255,255,255,.18); color: #fff; }
   .photo-btn svg { width: 18px; height: 18px; }
-
-  .photo-stage {
+.photo-stage {
     width: 100vw; height: 100vh; display: grid; place-items: center; overflow: hidden; position: relative; cursor: grab;
   }
   .photo-stage:active { cursor: grabbing; }
@@ -682,7 +681,6 @@
   <button class="photo-nav prev" id="photoPrev" type="button" title="Foto anterior (←)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
   <button class="photo-nav next" id="photoNext" type="button" title="Foto siguiente (→)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
   <div class="photo-counter" id="photoCounter"></div>
-
   <div class="photo-stage" id="photoStage">
     <img id="photoImg" class="photo-img" src="" alt="Foto">
     <div class="photo-no-img" id="photoNoImg">
@@ -707,144 +705,45 @@ const DEFAULT_DATA = {"version":"v202610_11","arts":[["FINSDE00005","CAJA FUERTE
    si no, se usan los DEFAULT_DATA de arriba (datos del Power BI).
    ================================================================ */
 let DATA = DEFAULT_DATA;
-/* NOTROS (mayúsculas) -> { p: [nombres FOTO_PRINCIPAL], o: [nombres FOTO_OTRAS] } */
-const PHOTO_MAP = new Map();
-(function syncDesdeExcel() {
-  // Si se vuelve a cargar el Excel en index.html con este tablero abierto, se refresca solo
-  window.addEventListener('storage', ev => { if (ev.key === 'slots_data_movimientos') location.reload(); });
-  let raw;
-  try { raw = localStorage.getItem('slots_data_movimientos'); } catch (e) { return; }
-  if (!raw) return;
+/* Mapa de fotos tomado de MOVIMIENTOS_AF.xlsx.
+   Cada Nro Serie (NOTROS) conserva únicamente el archivo indicado en FOTO_PRINCIPAL/FOTO_OTRAS. */
+const PHOTO_MAP = new Map([
+  ['W0000000001001', { p: [], o: ['C:\\Attachment\\Mirai4Dev\\download\\CAJA1.jpeg'] }],
+  ['W0000000002001', { p: [], o: ['C:\\Attachment\\Mirai4Dev\\download\\CAJA1.jpeg'] }],
+  ['W0000000003001', { p: [], o: ['C:\\Attachment\\Mirai4Dev\\download\\CAJA1.jpeg'] }],
+  ['W0000000004001', { p: [], o: ['C:\\Attachment\\Mirai4Dev\\download\\CAJA2.jpeg'] }]
+]);
+
+// Si Index.html tiene un Excel más reciente guardado en el navegador, actualiza
+// el mapa de fotos por NOTROS sin alterar la cantidad ni los datos de movimientos de esta página.
+(function loadPhotoMapFromExcelStorage() {
   try {
-    const rawJson = JSON.parse(raw);
-    if (!Array.isArray(rawJson) || !rawJson.length) return;
-
-    // Lectura tolerante de columnas: ignora mayusculas, tildes, espacios y guiones
+    const raw = localStorage.getItem('slots_data_movimientos');
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data) || !data.length) return;
     const nk = s => String(s).normalize('NFD').replace(/\p{M}/gu, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const colMap = {};
-    rawJson.slice(0, 50).forEach(f => Object.keys(f).forEach(k => { if (!(nk(k) in colMap)) colMap[nk(k)] = k; }));
-    const findCol = aliases => { for (const a of aliases) if (colMap[a]) return colMap[a]; return null; };
-    const C = {
-      fecha:  findCol(['FECHA']),
-      artcod: findCol(['ARTCOD']),
-      despro: findCol(['DESPRO']),
-      destip: findCol(['DESTIP']),
-      codemp: findCol(['CODEMP']),
-      edific: findCol(['EDIFIC', 'EDIFICIO']),
-      piso:   findCol(['PISO']),
-      lugar:  findCol(['LUGAR', 'UBICACION']),
-      cust:   findCol(['CUSTODIO']),
-      tipo:   findCol(['TIPPRO']),
-      notros: findCol(['NOTROS']),
-      cant:   findCol(['CANTIDAD']),
-      tasig:  findCol(['TIPOASIGNACION', 'TIPOASIG', 'TIPASI', 'TIPOASI']),
-      estado: findCol(['ESTADO', 'ESTADOMOV', 'ESTADOAF']),
-      recep:  findCol(['RECEPCIONISTAID', 'RECEPCIONISTA']),
-      ucarga: findCol(['USUARIODECARGA', 'USUARIOCARGA', 'USUARIOWEB']),
-      estDoc: findCol(['ESTADODOCUMENTAL', 'ESTADODOC', 'ESTDOC']),
-      oc:     findCol(['ORDENDECOMPRA', 'ORDENCOMPRA', 'ORDCOM', 'NROOC', 'NUMOC', 'OC']),
-      req:    findCol(['REQUERIMIENTO', 'NROREQ', 'NUMREQ', 'REQ']),
-      frm:    findCol(['NROFOR', 'CODFOR', 'FORMULARIO']),
-      fotoP:  findCol(['FOTOPRINCIPAL', 'FOTOPRIN', 'FOTO1']),
-      fotoO:  findCol(['FOTOOTRAS', 'FOTOSOTRAS', 'OTRASFOTOS', 'FOTOOTRA', 'FOTOSADICIONALES'])
-    };
-    const docCols = [C.oc, C.req, C.frm].filter(Boolean);
-    if (!C.estDoc) console.warn('Trazabilidad: el Excel no trae una columna de Estado Documental; se calcula con', docCols.length ? docCols.join(', ') : '(ninguna columna documental encontrada)');
-
-    const val = (f, k) => (k && f[k] !== undefined && f[k] !== null) ? String(f[k]).trim() : '';
-    const pad = n => String(n).padStart(2, '0');
-    const toISO = v => {
-      if (typeof v === 'number') return new Date(Math.round((v - 25569) * 86400 * 1000)).toISOString().split('T')[0];
-      if (v instanceof Date) return v.toISOString().split('T')[0];
-      if (typeof v === 'string' && v.trim()) {
-        const s = v.trim();
-        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-        const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
-        if (m) return `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad(m[2])}-${pad(m[1])}`;
-      }
-      return '2000-01-01';
-    };
-
-    const arts = [], dArts = new Map(), ubs = [], dUbs = new Map();
-    const custs = [], dCusts = new Map(), tipos = [], dTipos = new Map();
-    const estados = [], dEstados = new Map(), notros = [], dNotros = new Map();
-    const idx = (map, arr, v) => { if (!map.has(v)) { map.set(v, arr.length); arr.push(v); } return map.get(v); };
-    const SIN_UB = 'Sin ubicación';
-    const rows = [];
-    let minD = '9999-99-99', maxD = '0000-00-00';
-
-    const splitFotos = v => String(v == null ? '' : v).split(/[;,|\n\r]+/).map(x => x.trim()).filter(x => x && !/^(0|-|n\/?a|null|nan|undefined)$/i.test(x));
-    // Primer movimiento (por fecha) de cada Nro Serie: es el Ingreso; los positivos posteriores son Recepciones.
-    const firstIdx = new Set(), seenN = new Set();
-    rawJson.map((f, i) => ({ i, d: toISO(f[C.fecha]), k: val(f, C.notros).toUpperCase() }))
-      .sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : a.i - b.i)
-      .forEach(o => { if (o.k && !seenN.has(o.k)) { seenN.add(o.k); firstIdx.add(o.i); } });
-    const TIPOS_OK = { INGRESO: 'Ingreso', RECEPCION: 'Recepción', ENTREGA: 'Entrega' };
-
-    rawJson.forEach((f, ri) => {
-      const nKey = val(f, C.notros).toUpperCase();
-      if (nKey && (C.fotoP || C.fotoO)) {
-        let e = PHOTO_MAP.get(nKey); if (!e) { e = { p: [], o: [] }; PHOTO_MAP.set(nKey, e); }
-        splitFotos(C.fotoP ? f[C.fotoP] : '').forEach(x => { if (!e.p.includes(x)) e.p.push(x); });
-        splitFotos(C.fotoO ? f[C.fotoO] : '').forEach(x => { if (!e.o.includes(x)) e.o.push(x); });
-      }
-      const fecha = toISO(f[C.fecha]);
-      if (fecha < minD) minD = fecha; if (fecha > maxD) maxD = fecha;
-
-      const aCod = val(f, C.artcod) || 'S/D', aDes = val(f, C.despro), aTip = val(f, C.destip);
-      const kA = aCod + '|' + aDes + '|' + aTip;
-      if (!dArts.has(kA)) { dArts.set(kA, arts.length); arts.push([aCod, aDes, aTip]); }
-
-      const u = [val(f, C.codemp) || SIN_UB, val(f, C.edific) || SIN_UB, val(f, C.piso) || SIN_UB, val(f, C.lugar) || SIN_UB];
-      const kU = u.join('|');
-      if (!dUbs.has(kU)) { dUbs.set(kU, ubs.length); ubs.push(u); }
-
-      const cantRaw = f[C.cant];
-      const cant = (cantRaw === undefined || cantRaw === null || cantRaw === '' || !Number.isFinite(Number(cantRaw))) ? null : Number(cantRaw);
-      // TIPPRO a veces trae el tipo de artículo (ej. FINSDE) y no el movimiento: solo se respeta si es Ingreso/Recepción/Entrega.
-      // Si no, se deduce: cantidad negativa = Entrega; positiva = Ingreso (primer movimiento del Nro Serie) o Recepción (los siguientes).
-      let tipo = TIPOS_OK[nk(val(f, C.tipo))] || '';
-      if (!tipo) {
-        if (cant === null || cant === 0) tipo = 'Sin cantidad';
-        else if (cant < 0) tipo = 'Entrega';
-        else tipo = (!nKey || firstIdx.has(ri)) ? 'Ingreso' : 'Recepción';
-      }
-
-      let est = val(f, C.estDoc);
-      if (!est) {
-        const lleno = docCols.filter(c => val(f, c) !== '').length;
-        est = lleno === 0 ? 'Sin documento' : (lleno === docCols.length ? 'Completo' : 'Incompleto');
-      }
-
-      rows.push([
-        fecha,
-        dArts.get(kA),
-        dUbs.get(kU),
-        idx(dCusts, custs, val(f, C.cust)),
-        idx(dTipos, tipos, tipo),
-        idx(dEstados, estados, est),
-        idx(dNotros, notros, val(f, C.notros)),
-        cant,
-        val(f, C.tasig) || 'Normal',
-        val(f, C.estado),
-        val(f, C.recep),
-        val(f, C.ucarga)
-      ]);
+    const cols = {};
+    data.slice(0, 50).forEach(row => Object.keys(row).forEach(k => { cols[nk(k)] ||= k; }));
+    const col = names => names.map(n => cols[n]).find(Boolean);
+    const cNotros = col(['NOTROS']);
+    const cPrincipal = col(['FOTOPRINCIPAL', 'FOTOPRIN', 'FOTO1']);
+    const cOtras = col(['FOTOOTRAS', 'FOTOSOTRAS', 'OTRASFOTOS', 'FOTOOTRA', 'FOTOSADICIONALES']);
+    if (!cNotros) return;
+    const split = v => String(v ?? '').split(/[;,|\n\r]+/).map(x => x.trim()).filter(x => x && !/^(0|-|n\/?a|null|nan|undefined)$/i.test(x));
+    data.forEach(row => {
+      const code = String(row[cNotros] ?? '').trim().toUpperCase();
+      if (!code) return;
+      // Las asociaciones vigentes del archivo entregado prevalecen; solo se agregan
+      // nombres adicionales para números de serie que todavía no estén en el mapa.
+      if (PHOTO_MAP.has(code)) return; // conserva las asociaciones verificadas del Excel entregado
+      const entry = { p: [], o: [] };
+      split(cPrincipal ? row[cPrincipal] : '').forEach(n => { if (!entry.p.includes(n)) entry.p.push(n); });
+      split(cOtras ? row[cOtras] : '').forEach(n => { if (!entry.o.includes(n)) entry.o.push(n); });
+      PHOTO_MAP.set(code, entry);
     });
-
-    // El filtro de Custodio solo lista custodios con nombre
-    const slCust = custs.map((c, i) => c ? i : -1).filter(i => i >= 0);
-    const y0 = minD.slice(0, 4), y1 = maxD.slice(0, 4);
-
-    DATA = {
-      version: 'Sincronizado vía Excel',
-      arts, ubs, custs, tipos, estados, notros, rows, slCust,
-      minDate: y0 + '-01-01', maxDate: y1 + '-12-31'
-    };
-    console.log('Trazabilidad: datos del Excel cargados', rows.length, 'filas');
   } catch (e) {
-    console.error('Trazabilidad: fallo al procesar los datos del Excel. Se usan los datos por defecto.', e);
-    DATA = DEFAULT_DATA;
+    console.warn('No se pudo leer el mapa de fotos del Excel; se usa el mapa incluido.', e);
   }
 })();
 const { arts: ARTS, ubs: UBS, custs: CUSTS, tipos: TIPOS, estados: ESTADOS, notros: NOTROS, rows: ROWS } = DATA;
@@ -1168,81 +1067,99 @@ function resetZoom() {
   updateTransform();
 }
 
-/* ---- Fotos: se leen de las columnas FOTO_PRINCIPAL / FOTO_OTRAS del Excel y se
-        buscan por nombre entre las fotos que se subieron en el index (IndexedDB
-        'slots_fotos'). Si no hay nada, se prueban las rutas fotos/... de antes. ---- */
+/* ---- Fotos automáticas desde la carpeta del proyecto de VS Code ---- */
 const photoPrev = $('#photoPrev'), photoNext = $('#photoNext'), photoCounter = $('#photoCounter');
-let photoList = [], photoIdx = 0, photoBlobURLs = [], photoRequestId = 0, photoCode = '';
+let photoList = [], photoIdx = 0, photoRequestId = 0, photoCode = '';
+const IMAGE_EXTS = ['jpg','jpeg','jfif','png','webp','gif','bmp','tif','tiff','avif','heic','heif'];
 
-function revokePhotoURLs() { photoBlobURLs.forEach(u => URL.revokeObjectURL(u)); photoBlobURLs = []; }
-
-function openPhotoDB() {
+function revokePhotoURLs() {}
+const fotoBase = n => String(n).split('?')[0].split('#')[0].split(/[\\/]/).pop().trim();
+const fotoStem = n => fotoBase(n).replace(/\.[^.]+$/, '');
+const fotoNorm = n => fotoStem(n).normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+const cajaTag = n => {
+  const s = String(n).normalize('NFD').replace(/\p{M}/gu,'').toLowerCase();
+  const m = s.match(/caja[\s_-]*0*([12])(?=[^0-9]|$)/i);
+  return m ? 'CAJA' + m[1] : '';
+};
+function probeImage(url) {
   return new Promise(resolve => {
-    try {
-      if (!window.indexedDB) return resolve(null);
-      const req = indexedDB.open('slots_fotos', 1);
-      req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains('fotos')) req.result.createObjectStore('fotos'); };
-      req.onerror = () => resolve(null);
-      req.onsuccess = () => resolve(req.result);
-    } catch (e) { resolve(null); }
+    const im = new Image();
+    im.onload = () => resolve(true);
+    im.onerror = () => resolve(false);
+    im.src = url;
   });
 }
-const idbReq = r => new Promise(res => { r.onsuccess = () => res(r.result); r.onerror = () => res(null); });
-
-const fotoBase = n => String(n).split('?')[0].split('#')[0].split(/[\\/]/).pop().trim();
-const fotoKey = n => fotoBase(n).replace(/\.[^.]+$/, '').toLowerCase();
-const isDirectURL = n => /^(https?:|data:image|blob:)/i.test(n);
-
-function probeImage(url) {
-  return new Promise(res => { const im = new Image(); im.onload = () => res(true); im.onerror = () => res(false); im.src = url; });
+async function getProjectPhotoIndex() {
+  // Se consulta en cada clic: las fotos nuevas copiadas a la carpeta aparecen sin reiniciar.
+  try {
+    const r = await fetch('./api/fotos', { cache: 'no-store' });
+    if (!r.ok) return [];
+    const x = await r.json();
+    return Array.isArray(x) ? x : [];
+  } catch (e) { return []; }
 }
-
+function photoUrlCandidates(filename) {
+  const base = fotoBase(filename);
+  if (!base) return [];
+  const stem = fotoStem(base);
+  const hasExt = /\.[^.]+$/.test(base);
+  const names = hasExt ? [base, ...IMAGE_EXTS.map(ext => stem + '.' + ext)] : IMAGE_EXTS.map(ext => stem + '.' + ext);
+  const dirs = ['./', './Fotos_Otras/', './fotos/', './Fotos/'];
+  return [...new Set(dirs.flatMap(dir => names.map(n => dir + encodeURIComponent(n).replace(/%2F/gi, '/'))))];
+}
 async function collectPhotos(code) {
-  const out = [], used = new Set();
-  const entry = PHOTO_MAP.get(String(code).trim().toUpperCase()) || { p: [], o: [] };
-  const wanted = [...entry.p.map(n => ({ n, t: 'principal' })), ...entry.o.map(n => ({ n, t: 'otra' }))];
+  const entry = PHOTO_MAP.get(String(code || '').trim().toUpperCase()) || { p: [], o: [] };
+  const wanted = [...entry.p.map(n => ({ n, label: 'Foto principal' })), ...entry.o.map(n => ({ n, label: 'Otra foto' }))];
+  const out = [], seen = new Set();
+  const index = await getProjectPhotoIndex();
 
-  const db = await openPhotoDB();
-  let keys = [];
-  if (db) {
-    try { keys = await idbReq(db.transaction('fotos').objectStore('fotos').getAllKeys()) || []; } catch (e) { keys = []; }
-  }
-  const keyMap = new Map(); keys.forEach(k => keyMap.set(String(k).trim().toLowerCase(), k));
-  const getBlob = async k => {
-    try { const v = await idbReq(db.transaction('fotos').objectStore('fotos').get(k)); return v && v.blob ? v.blob : null; } catch (e) { return null; }
-  };
-  const addKey = async (k, label) => {
-    if (used.has(k)) return false;
-    const blob = await getBlob(k); if (!blob) return false;
-    used.add(k);
-    const url = URL.createObjectURL(blob); photoBlobURLs.push(url);
-    out.push({ url, label }); return true;
-  };
-
-  // 1) Nombres que dice el Excel en FOTO_PRINCIPAL y FOTO_OTRAS
+  // Primero: buscar en el índice local del proyecto, sin importar mayúsculas,
+  // espacios, guiones, sufijos de copia o extensión (.jpg/.jpeg/.png/.webp/etc.).
   for (const w of wanted) {
-    const label = w.t === 'principal' ? 'Foto principal' : 'Otra foto';
-    if (isDirectURL(w.n)) { out.push({ url: w.n, label }); continue; }
-    const k = keyMap.get(fotoKey(w.n));
-    if (k !== undefined) await addKey(k, label);
+    const base = fotoBase(w.n);
+    const stem = fotoStem(base);
+    const tag = cajaTag(base);
+    const norm = fotoNorm(stem);
+    let matches = index.filter(f => {
+      const fileName = f.name || (f.path || '').split('/').pop() || '';
+      const candidateTag = cajaTag(fileName);
+      const candidateNorm = fotoNorm(fileName);
+      if (tag) return candidateTag === tag;
+      return candidateNorm === norm || candidateNorm.startsWith(norm);
+    });
+    matches.sort((a,b) => {
+      const an = a.name || (a.path || '').split('/').pop() || '';
+      const bn = b.name || (b.path || '').split('/').pop() || '';
+      const exactA = fotoNorm(an) === norm ? 0 : 1;
+      const exactB = fotoNorm(bn) === norm ? 0 : 1;
+      return exactA - exactB || (Number(b.mtime || 0) - Number(a.mtime || 0));
+    });
+    const exact = matches.filter(f => {
+      const fn = f.name || (f.path || '').split('/').pop() || '';
+      return fotoNorm(fn) === norm;
+    });
+    const selected = exact.length ? exact.slice(0, 1) : matches;
+    for (const f of selected) {
+      const url = f.url || ('./' + String(f.path || '').split('/').map(encodeURIComponent).join('/'));
+      if (url && !seen.has(url)) {
+        if (await probeImage(url)) { seen.add(url); out.push({ url, label: w.label }); }
+      }
+    }
   }
-  // 2) Si el Excel no trae nombres, se busca por el Nro Serie (NOTROS) y sus variantes _1, -2, (3)
-  if (!out.length) {
-    const want = String(code).trim().toLowerCase();
-    const suf = /^([\s_-]\d{1,2}|\s*\(\d+\))$/;
-    const matches = keys.filter(k => { const K = String(k).trim().toLowerCase(); return K === want || (K.startsWith(want) && suf.test(K.slice(want.length))); })
-                        .sort((x, y) => String(x).localeCompare(String(y), 'es', { numeric: true }));
-    for (const k of matches) await addKey(k, out.length ? 'Otra foto' : 'Foto principal');
-  }
-  if (db) db.close();
 
-  // 3) Compatibilidad: carpeta fotos/ junto al HTML
+  // Segundo: compatibilidad sin servidor Python. Busca rutas directas relativas al HTML,
+  // en la raíz del proyecto y en Fotos_Otras/fotos/Fotos, probando extensiones de imagen.
   if (!out.length) {
-    const rel = [];
-    wanted.forEach(w => { const b = fotoBase(w.n); if (b) { rel.push(`fotos/${b}`); if (!/\.[^.]+$/.test(b)) ['jpg', 'jpeg', 'png'].forEach(x => rel.push(`fotos/${b}.${x}`)); } });
-    ['jpg', 'png', 'jpeg'].forEach(x => rel.push(`fotos/${code}.${x}`));
-    ['jpg', 'png'].forEach(x => rel.push(`${code}.${x}`));
-    for (const u of rel) { if (await probeImage(u)) { out.push({ url: u, label: out.length ? 'Otra foto' : 'Foto principal' }); } }
+    for (const w of wanted) {
+      for (const url of photoUrlCandidates(w.n)) {
+        if (seen.has(url)) continue;
+        if (await probeImage(url)) {
+          seen.add(url);
+          out.push({ url, label: w.label });
+          break;
+        }
+      }
+    }
   }
   return out;
 }
