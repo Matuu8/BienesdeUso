@@ -699,7 +699,7 @@
    Artículo  = [Artcod, Despro, Destip]
    Ubicación = [Establecimiento, Edificio, Piso, Ubicacion]
    ================================================================ */
-const DEFAULT_DATA = {"version":"v202610_11","arts":[["FINSDE00005","CAJA FUERTE (UN) - AF","INSTALACIONES - INSTALACIONES DEPOSITOS - AF"]],"ubs":[["MERLO","HOTEL","PLANTA BAJA","DEPOSITO"],["MERLO","HOTEL","PLANTA BAJA","OFICINA DISTRIBUCION"]],"custs":["Leonardo Jesus Pla Nievas"],"tipos":["FINSDE"],"estados":["Incompleto"],"notros":["W0000000001001","W0000000002001","W0000000003001","W0000000004001"],"rows":[["2026-11-03",0,0,0,0,0,0,1,"Normal","","","leonardo.pla@gruposlots.com.ar"],["2026-11-03",0,0,0,0,0,1,1,"Normal","","","leonardo.pla@gruposlots.com.ar"],["2026-11-03",0,0,0,0,0,2,1,"Normal","","","leonardo.pla@gruposlots.com.ar"],["2026-11-03",0,0,0,0,0,3,1,"Normal","","","leonardo.pla@gruposlots.com.ar"],["2026-11-03",0,1,0,0,0,0,-1,"Normal","Transito","Bacilio Andres Busto","leonardo.pla@gruposlots.com.ar"],["2026-11-03",0,1,0,0,0,1,-1,"Normal","Transito","Bacilio Andres Busto","leonardo.pla@gruposlots.com.ar"],["2026-11-03",0,1,0,0,0,2,-1,"Normal","Transito","Bacilio Andres Busto","leonardo.pla@gruposlots.com.ar"]],"slCust":[0],"minDate":"2026-01-01","maxDate":"2026-12-31"};
+const DEFAULT_DATA = {"version":"v202610_11","arts":[["FINSDE00005","CAJA FUERTE (UN) - AF","INSTALACIONES - INSTALACIONES DEPOSITOS - AF"]],"ubs":[["MERLO","HOTEL","PLANTA BAJA","DEPOSITO"],["MERLO","HOTEL","PLANTA BAJA","OFICINA DISTRIBUCION"]],"custs":["Leonardo Jesus Pla Nievas"],"tipos":["Ingreso","Entrega"],"estados":["Incompleto"],"notros":["W0000000001001","W0000000002001","W0000000003001","W0000000004001"],"rows":[["2026-11-03",0,0,0,0,0,0,1,"Normal","","","leonardo.pla@gruposlots.com.ar"],["2026-11-03",0,0,0,0,0,1,1,"Normal","","","leonardo.pla@gruposlots.com.ar"],["2026-11-03",0,0,0,0,0,2,1,"Normal","","","leonardo.pla@gruposlots.com.ar"],["2026-11-03",0,0,0,0,0,3,1,"Normal","","","leonardo.pla@gruposlots.com.ar"],["2026-11-03",0,1,0,1,0,0,-1,"Normal","Transito","Bacilio Andres Busto","leonardo.pla@gruposlots.com.ar"],["2026-11-03",0,1,0,1,0,1,-1,"Normal","Transito","Bacilio Andres Busto","leonardo.pla@gruposlots.com.ar"],["2026-11-03",0,1,0,1,0,2,-1,"Normal","Transito","Bacilio Andres Busto","leonardo.pla@gruposlots.com.ar"]],"slCust":[0],"minDate":"2026-01-01","maxDate":"2026-12-31"};
 /* ================================================================
    SINCRONIZACION CON EL EXCEL CARGADO EN index.html
    index.html guarda las filas del Excel en localStorage ('slots_data_movimientos').
@@ -774,7 +774,14 @@ const PHOTO_MAP = new Map();
     let minD = '9999-99-99', maxD = '0000-00-00';
 
     const splitFotos = v => String(v == null ? '' : v).split(/[;,|\n\r]+/).map(x => x.trim()).filter(x => x && !/^(0|-|n\/?a|null|nan|undefined)$/i.test(x));
-    rawJson.forEach(f => {
+    // Primer movimiento (por fecha) de cada Nro Serie: es el Ingreso; los positivos posteriores son Recepciones.
+    const firstIdx = new Set(), seenN = new Set();
+    rawJson.map((f, i) => ({ i, d: toISO(f[C.fecha]), k: val(f, C.notros).toUpperCase() }))
+      .sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : a.i - b.i)
+      .forEach(o => { if (o.k && !seenN.has(o.k)) { seenN.add(o.k); firstIdx.add(o.i); } });
+    const TIPOS_OK = { INGRESO: 'Ingreso', RECEPCION: 'Recepción', ENTREGA: 'Entrega' };
+
+    rawJson.forEach((f, ri) => {
       const nKey = val(f, C.notros).toUpperCase();
       if (nKey && (C.fotoP || C.fotoO)) {
         let e = PHOTO_MAP.get(nKey); if (!e) { e = { p: [], o: [] }; PHOTO_MAP.set(nKey, e); }
@@ -794,8 +801,14 @@ const PHOTO_MAP = new Map();
 
       const cantRaw = f[C.cant];
       const cant = (cantRaw === undefined || cantRaw === null || cantRaw === '' || !Number.isFinite(Number(cantRaw))) ? null : Number(cantRaw);
-      let tipo = val(f, C.tipo);
-      if (!tipo) tipo = (cant === null || cant === 0) ? 'Sin cantidad' : 'Sin clasificar';
+      // TIPPRO a veces trae el tipo de artículo (ej. FINSDE) y no el movimiento: solo se respeta si es Ingreso/Recepción/Entrega.
+      // Si no, se deduce: cantidad negativa = Entrega; positiva = Ingreso (primer movimiento del Nro Serie) o Recepción (los siguientes).
+      let tipo = TIPOS_OK[nk(val(f, C.tipo))] || '';
+      if (!tipo) {
+        if (cant === null || cant === 0) tipo = 'Sin cantidad';
+        else if (cant < 0) tipo = 'Entrega';
+        else tipo = (!nKey || firstIdx.has(ri)) ? 'Ingreso' : 'Recepción';
+      }
 
       let est = val(f, C.estDoc);
       if (!est) {
