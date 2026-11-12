@@ -774,11 +774,11 @@ function buildFromRaw(raw) {
     return null;
   };
   const kF = exact('FECHA'), kArt = exact('ARTCOD'), kDes = exact('DESPRO'), kDt = exact('DESTIP', 'DESCRIPCIONTIPO', 'DESTIPPRO', 'TIPPRO'),
-        kCod = exact('CODEMP'), kEd = exact('EDIFIC'), kPi = exact('PISO'), kLu = exact('LUGAR'), kCu = exact('CUSTODIO'),
+        kCod = exact('ESTABLECIMIENTO', 'CODIGO', 'CODEMP'), kCF = exact('CODFOR'), kEd = exact('EDIFIC'), kPi = exact('PISO'), kLu = exact('LUGAR'), kCu = exact('CUSTODIO'),
         kNo = exact('NOTROS'), kCa = exact('CANTIDAD'),
         kTm = exact('TIPODEMOVIMIENTO', 'TIPOMOVIMIENTO', 'TIPMOV', 'TIPOMOV', 'MOVIMIENTO', 'TIPOMOVIM'),
         kAs = exact('TIPODEASIGNACION', 'TIPOASIGNACION', 'TIPASIGNACION', 'TIPOASIG', 'ASIGNACION', 'TIPASIG'),
-        kEs = exact('ESTADO', 'ESTADOACTIVO', 'ESTADOBIEN'),
+        kEA = exact('ESTADODEASIGNACION', 'ESTADOASIGNACION'), kEs = exact('ESTADO', 'ESTADOACTIVO', 'ESTADOBIEN'),
         kRe = exact('RECEPCIONISTAID', 'RECEPCIONISTA', 'IDRECEPCIONISTA', 'RECEPID'),
         kUc = exact('USUARIODECARGA', 'USUARIOCARGA', 'USUARIOWEB', 'USUARIO'),
         kNF = prefix('NROFORLIMPIO', 'NROFOR', 'NUMFOR', 'NFOR'),
@@ -811,6 +811,18 @@ function buildFromRaw(raw) {
     return nf && oc ? 'Completo' : (nf || oc) ? 'Incompleto' : 'Sin documento';
   };
 
+  // El Excel no trae la columna "Tipo de Movimiento": se deduce del código de formulario (CODFOR)
+  // y, si es desconocido, del signo de la cantidad (+ Ingreso / − Entrega).
+  const tipoMov = (f, cant) => {
+    const t = S(val(f, kTm)); if (t) return t;
+    const c = S(val(f, kCF)).toUpperCase();
+    if (c === 'IRL') return 'Ingreso';
+    if (c === 'WEB') return 'Entrega';
+    if (c === 'AE')  return 'Recepción';
+    return cant > 0 ? 'Ingreso' : cant < 0 ? 'Entrega' : SD;
+  };
+  const tipoAsig = v => { v = S(v); return /^0*1$/.test(v) ? 'Normal' : v; };   // "01" = Normal (igual que el Power BI)
+
   const dArts = new Map(), dUbs = new Map(), dCusts = new Map(), dTipos = new Map(), dNot = new Map();
   const arts = [], ubs = [], custs = [], tipos = [], notros = [], estados = ['Completo', 'Incompleto', 'Sin documento'];
   const getIdx = (map, arr, v) => { v = S(v); if (!map.has(v)) { map.set(v, arr.length); arr.push(v); } return map.get(v); };
@@ -832,9 +844,9 @@ function buildFromRaw(raw) {
     rows.push([
       fecha || '2000-01-01', dArts.get(keyArt),
       ubIdx(val(f, kCod), val(f, kEd), val(f, kPi), val(f, kLu)),
-      getIdx(dCusts, custs, val(f, kCu)), getIdx(dTipos, tipos, S(val(f, kTm)) || SD),
+      getIdx(dCusts, custs, val(f, kCu)), getIdx(dTipos, tipos, tipoMov(f, cant)),
       estados.indexOf(est), getIdx(dNot, notros, val(f, kNo)), cant,
-      S(val(f, kAs)), S(val(f, kEs)), S(val(f, kRe)), S(val(f, kUc))
+      tipoAsig(val(f, kAs)), S(val(f, kEA)) || S(val(f, kEs)), S(val(f, kRe)), S(val(f, kUc))
     ]);
   });
   dates.sort();
@@ -2009,4 +2021,9 @@ window.SLOTS_XMAS_SWITCH = false;
 })();
 
 </script>
+
+<!-- Tema patrio 25 de Mayo: compartido por todas las páginas mediante 25demayo.js -->
+<script src="25demayo.js"></script>
+
 </body>
+</html>
