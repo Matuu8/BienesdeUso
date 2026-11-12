@@ -374,6 +374,67 @@
   .login-input.bad{border-color:#FF7B7B;box-shadow:0 0 0 3px rgba(255,123,123,.12)}
   html.xm-on .login-input:focus{border-color:#5BD68A;box-shadow:0 0 0 3px rgba(91,214,138,.14)}
   @media(max-width:560px){.session-bar{top:8px;right:8px;gap:6px}.session-user span{display:none}}
+
+  /* ===== Sincronización de datos (Google Sheets vía Apps Script) ===== */
+  .sync.sync-locked{display:none!important}
+  .sync{width:min(1180px,92vw);margin-top:clamp(18px,3vh,30px);opacity:0;animation:fadeIn .8s var(--ease) 1.1s forwards}
+  .sync-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px 22px;padding:14px 18px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(160deg,rgba(255,255,255,.07),rgba(255,255,255,.02));backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  .sync-state{display:flex;align-items:center;gap:13px;min-width:0;flex:1 1 280px;text-align:left}
+  .sync-dot{flex:none;width:11px;height:11px;border-radius:50%;background:#71839F;box-shadow:0 0 0 4px rgba(113,131,159,.22);transition:background .3s,box-shadow .3s}
+  .sync[data-st="ok"] .sync-dot{background:#4DB6AC;box-shadow:0 0 0 4px rgba(77,182,172,.24)}
+  .sync[data-st="load"] .sync-dot{background:#4DA6FF;box-shadow:0 0 0 4px rgba(77,166,255,.24);animation:syncPulse 1s ease-in-out infinite}
+  .sync[data-st="err"] .sync-dot{background:#FF7B7B;box-shadow:0 0 0 4px rgba(255,123,123,.24)}
+  @keyframes syncPulse{50%{transform:scale(1.35)}}
+  .sync-txt{min-width:0}
+  .sync-txt strong{display:block;font-size:.95rem;font-weight:700;color:var(--ink)}
+  .sync-txt span{display:block;margin-top:2px;font-size:.78rem;line-height:1.45;color:var(--ink-soft);overflow-wrap:anywhere}
+  .sync[data-st="err"] #syncSub{color:#FFB4B4}
+  .sync-ctrl{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+  .sync-int{display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--ink-soft)}
+  .sync-int select,.sd-in{font:600 .82rem var(--font);color:var(--ink);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:9px 12px;outline:none;transition:border-color .2s,background .2s}
+  .sync-int select{cursor:pointer}
+  .sync-int select option{background:#0A1A33;color:#F5F5F5}
+  .sync-int select:focus-visible,.sd-in:focus{border-color:var(--c-resumen);background:rgba(77,166,255,.07)}
+  .sync-btn,.sync-more,.sd-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font:700 .82rem var(--font);border-radius:11px;cursor:pointer;transition:background .2s,border-color .2s,transform .2s,filter .2s}
+  .sync-btn{padding:10px 18px;color:#fff;border:1px solid rgba(120,184,255,.5);background:linear-gradient(135deg,#0A3C8F,#1767C5)}
+  .sync-btn:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.12)}
+  .sync-btn:disabled{opacity:.65;cursor:progress}
+  .sync-btn svg{width:16px;height:16px}
+  .sync[data-st="load"] .sync-btn svg{animation:syncSpin .8s linear infinite}
+  @keyframes syncSpin{to{transform:rotate(360deg)}}
+  .sync-more{padding:10px 14px;color:var(--ink-soft);border:1px solid var(--line);background:rgba(255,255,255,.04)}
+  .sync-more:hover{color:#fff;border-color:rgba(255,255,255,.28)}
+  .sync-more svg{width:14px;height:14px;transition:transform .3s var(--ease)}
+  .sync-more[aria-expanded="true"] svg{transform:rotate(180deg)}
+  .sync-btn:focus-visible,.sync-more:focus-visible,.sd-btn:focus-visible{outline:2px solid var(--c-resumen);outline-offset:3px}
+
+  .sync-detail{margin-top:12px;padding:20px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.015));backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);text-align:left}
+  .sync-detail[hidden]{display:none}
+  .sd-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  .sync-detail h3{font-size:.86rem;font-weight:800;letter-spacing:.02em;margin-bottom:10px;color:#C6DDF8}
+  .sd-l{display:block;font-size:.76rem;color:var(--ink-soft);margin:10px 0 6px}
+  .sd-in{width:100%}
+  .sd-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .sd-btn{padding:9px 14px;color:#fff;border:1px solid rgba(77,166,255,.4);background:rgba(10,60,143,.55)}
+  .sd-btn:hover{background:rgba(23,103,197,.7)}
+  .sd-btn.ghost{color:#C6DDF8;border-color:rgba(255,255,255,.18);background:rgba(255,255,255,.05)}
+  .sd-note{margin-top:12px;font-size:.74rem;line-height:1.5;color:var(--ink-soft)}
+  .sd-tabs{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
+  .sd-tab{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.04);font-size:.82rem}
+  .sd-tab b{font-weight:700}
+  .sd-tab em{font-style:normal;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:8px;color:#07101F;background:var(--c-ubicacion)}
+  .sd-tab span{color:var(--ink-soft);font-size:.76rem}
+  .sd-empty{font-size:.8rem;color:var(--ink-soft)}
+  .sd-dash{list-style:none;display:flex;flex-direction:column;gap:8px}
+  .sd-dash li{--a:var(--c-resumen);display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:9px 12px;border-radius:12px;border:1px solid color-mix(in srgb,var(--a) 40%,transparent);background:color-mix(in srgb,var(--a) 9%,transparent);font-size:.8rem}
+  .sd-dash li b{color:var(--a);font-weight:800}
+  .sd-dash li.warn{border-color:rgba(255,200,87,.5);background:rgba(255,200,87,.08)}
+  .sd-dash li small{color:var(--ink-soft);font-size:.74rem;flex-basis:100%}
+  .sd-cols{margin-top:18px}
+  .sd-chips{display:flex;flex-wrap:wrap;gap:6px}
+  .sd-chips i{font-style:normal;font-size:.72rem;padding:4px 9px;border-radius:99px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--ink-soft)}
+  .sd-chips i.used{color:var(--ink);border-color:rgba(77,166,255,.45);background:rgba(77,166,255,.12)}
+  @media(max-width:760px){.sd-grid{grid-template-columns:1fr}.sync-ctrl{width:100%}.sync-int{flex:1 1 100%}.sync-int select{flex:1}.sync-btn{flex:1}}
 </style>
 
 </head>
@@ -431,6 +492,68 @@
     <h1>Sistema de Informacion</h1>
     <p class="subtitle">Control de activos fijos: movimientos, ubicaciones, documentación y calidad de los datos. Elige un tablero para empezar.</p>
   </header>
+
+  <!-- Sincronización de datos con Google Sheets (Apps Script) -->
+  <section class="sync sync-locked" id="sync" data-st="idle" aria-label="Sincronización de datos">
+    <div class="sync-bar">
+      <div class="sync-state" role="status" aria-live="polite">
+        <i class="sync-dot" aria-hidden="true"></i>
+        <div class="sync-txt">
+          <strong id="syncTitle">Datos sin sincronizar</strong>
+          <span id="syncSub">Preparando conexión…</span>
+        </div>
+      </div>
+      <div class="sync-ctrl">
+        <label class="sync-int"><span>Auto-actualizar</span>
+          <select id="syncInterval" aria-label="Intervalo de actualización automática">
+            <option value="0">Solo manual</option>
+            <option value="1">Cada 1 minuto</option>
+            <option value="5">Cada 5 minutos</option>
+            <option value="15">Cada 15 minutos</option>
+            <option value="30">Cada 30 minutos</option>
+            <option value="60">Cada 1 hora</option>
+            <option value="180">Cada 3 horas</option>
+          </select>
+        </label>
+        <button type="button" class="sync-btn" id="syncBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 12A9 9 0 0 1 18.5 5.8L21 8"/><path d="M21 3v5h-5"/><path d="M3 21v-5h5"/></svg>
+          <span>Actualizar</span>
+        </button>
+        <button type="button" class="sync-more" id="syncMore" aria-expanded="false" aria-controls="syncDetail">
+          Detalles
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="sync-detail" id="syncDetail" hidden>
+      <div class="sd-grid">
+        <div>
+          <h3>Origen de los datos</h3>
+          <label class="sd-l" for="syncUrl">URL de Apps Script (termina en /exec)</label>
+          <input class="sd-in" id="syncUrl" type="url" spellcheck="false" autocomplete="off">
+          <label class="sd-l" for="syncToken">Token (opcional, solo si lo definiste en el script)</label>
+          <input class="sd-in" id="syncToken" type="text" spellcheck="false" autocomplete="off" placeholder="Dejar vacío si no usas token">
+          <div class="sd-row">
+            <button type="button" class="sd-btn" id="syncSave">Guardar y actualizar</button>
+            <button type="button" class="sd-btn ghost" id="syncReset">Restaurar URL original</button>
+          </div>
+          <p class="sd-note">Los datos se guardan en este navegador y los demás tableros los leen de ahí. Si dejas otra pestaña abierta, se actualiza sola cuando llegan datos nuevos.</p>
+        </div>
+        <div>
+          <h3>Lo que llegó desde tu hoja</h3>
+          <div class="sd-tabs" id="syncTabs"><div class="sd-empty">Todavía no hay datos cargados.</div></div>
+          <h3>Qué toma cada tablero</h3>
+          <ul class="sd-dash" id="syncDash"></ul>
+        </div>
+      </div>
+      <div class="sd-cols" id="syncColsWrap" hidden>
+        <h3>Columnas detectadas en la hoja principal <small style="font-weight:500;color:var(--ink-soft)">(resaltadas = las usa algún tablero)</small></h3>
+        <div class="sd-chips" id="syncCols"></div>
+      </div>
+    </div>
+  </section>
+
 
   <main>
     <nav class="cards" aria-label="Tableros del sistema">
@@ -1086,6 +1209,316 @@ window.SLOTS_XMAS_SWITCH = true;
   window.addEventListener('storage', function (e) { if (e.key === AUTH_KEY || e.key === null) refreshBar(); });
   window.addEventListener('pageshow', refreshBar);
   refreshBar();
+})();
+</script>
+<script>
+/* ============================================================
+   SINCRONIZACIÓN · Google Sheets (Apps Script) → todos los tableros
+   ------------------------------------------------------------
+   Guarda en localStorage (misma clave que ya leen las hojas):
+     slots_data_movimientos : filas de la pestaña principal [{COLUMNA: valor, ...}]
+     slots_data_extras      : {pestaña: filas} si el script devuelve más pestañas
+     slots_sync_meta        : {ts, ok, changed, rows, main, tabs, error}
+   Avisa a las otras hojas abiertas con:
+     - evento "storage" (cambia slots_sync_meta en cada actualización)
+     - BroadcastChannel "slots-data"
+   ============================================================ */
+(function () {
+  'use strict';
+
+  var DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbx31zV48QnUtMBW1JGwNqb5gdDz7-t3admyMenYISxP0ln3GI9gptuXVIbTyfHuSEmvvw/exec';
+  var DEFAULT_INTERVAL = 60;                 // minutos
+  var K_DATA = 'slots_data_movimientos', K_EXTRA = 'slots_data_extras',
+      K_META = 'slots_sync_meta', K_CFG = 'slots_sync_cfg';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var root = $('sync');
+  if (!root) return;
+  var el = {
+    title: $('syncTitle'), sub: $('syncSub'), btn: $('syncBtn'), sel: $('syncInterval'),
+    more: $('syncMore'), detail: $('syncDetail'), url: $('syncUrl'), token: $('syncToken'),
+    save: $('syncSave'), reset: $('syncReset'), tabs: $('syncTabs'), dash: $('syncDash'),
+    colsWrap: $('syncColsWrap'), cols: $('syncCols')
+  };
+
+  /* Qué columnas necesita cada tablero: [etiqueta, alias normalizados...] */
+  var DASH = [
+    { name: 'Resumen', color: '#4DA6FF', req: [['FECHA'], ['EDIFIC'], ['TIPPRO'], ['CUSTODIO'], ['CANTIDAD']] },
+    { name: 'Por Ubicación', color: '#4DB6AC', req: [['FECHA'], ['ARTCOD'], ['DESPRO'], ['CODEMP'], ['EDIFIC'], ['PISO'], ['LUGAR'], ['CUSTODIO'], ['UsuarioWeb'], ['TIPPRO'], ['NOTROS'], ['CANTIDAD']] },
+    { name: 'Trazabilidad', color: '#C77DFF', req: [['FECHA'], ['ARTCOD'], ['DESPRO'], ['CUSTODIO'], ['NOTROS'], ['CANTIDAD']] },
+    { name: 'Calidad', color: '#FF8A5C', req: [['FECHA'], ['CODEMP'], ['EDIFIC'], ['PISO'], ['LUGAR'], ['CUSTODIO'], ['TIPPRO'],
+      ['NROFOR', 'NROFORLIMPIO', 'NUMFOR', 'NFOR'],
+      ['ORDENDECOMPRA', 'ORDENDECOMPRALIMPIA', 'ORDENCOMPRA', 'NROORDENDECOMPRA', 'NROOC', 'OC'],
+      ['REQUERIMIENTO', 'REQUERIMIENTOLIMPIO', 'NROREQUERIMIENTO', 'NROREQ', 'REQ']] }
+  ];
+
+  var running = false, chan = null;
+  try { chan = ('BroadcastChannel' in window) ? new BroadcastChannel('slots-data') : null; } catch (e) {}
+
+  /* ---------- utilidades ---------- */
+  function normKey(s) { return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function fmtN(n) { return Number(n).toLocaleString('es-AR'); }
+  function fmtT(ts) { return new Date(ts).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+  function fmtLeft(ms) {
+    var s = Math.max(0, Math.round(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    s = s % 60;
+    return (h ? h + ' h ' : '') + (h || m ? m + ' min ' : '') + (h ? '' : s + ' s');
+  }
+  function jget(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
+  function readCfg() {
+    var c = jget(K_CFG) || {};
+    var iv = Number(c.interval);
+    return {
+      url: (c.url && String(c.url).trim()) || DEFAULT_URL,
+      token: c.token ? String(c.token).trim() : '',
+      interval: isFinite(iv) && c.interval !== undefined && c.interval !== null ? iv : DEFAULT_INTERVAL
+    };
+  }
+  function writeCfg(c) { try { localStorage.setItem(K_CFG, JSON.stringify(c)); } catch (e) {} }
+  function setState(st, title, sub) {
+    root.setAttribute('data-st', st);
+    if (title != null) el.title.textContent = title;
+    if (sub != null) el.sub.textContent = sub;
+  }
+
+  /* ---------- descarga ---------- */
+  function fetchJson(cfg) {
+    var url = cfg.url + (cfg.url.indexOf('?') > -1 ? '&' : '?') + '_=' + Date.now();
+    if (cfg.token) url += '&token=' + encodeURIComponent(cfg.token);
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var to = setTimeout(function () { if (ctrl) ctrl.abort(); }, 90000);
+    return fetch(url, { cache: 'no-store', redirect: 'follow', signal: ctrl ? ctrl.signal : undefined })
+      .then(function (r) {
+        clearTimeout(to);
+        if (!r.ok) throw new Error('El servidor respondió HTTP ' + r.status + '.');
+        return r.text();
+      })
+      .then(function (t) {
+        var s = t.trim();
+        if (s.charAt(0) === '<') throw new Error('La URL devolvió una página web en lugar de datos. Revisa que la implementación tenga acceso "Cualquier persona" y que la URL termine en /exec.');
+        try { return JSON.parse(s); } catch (e) { throw new Error('La respuesta no es un JSON válido.'); }
+      })
+      .catch(function (e) {
+        clearTimeout(to);
+        if (e && e.name === 'AbortError') throw new Error('Tiempo de espera agotado (90 s).');
+        if (e instanceof TypeError) throw new Error('No se pudo conectar con Apps Script (red, URL o permisos de la implementación).');
+        throw e;
+      });
+  }
+
+  /* Acepta {ok,hojas:{...}}, {hojas:[..]}, un arreglo directo, o {pestaña:[...]} */
+  function toHojas(p) {
+    if (Array.isArray(p)) return { 'Datos': p };
+    if (!p || typeof p !== 'object') throw new Error('Respuesta inesperada del script.');
+    if (p.ok === false) throw new Error(p.error || 'El script devolvió un error.');
+    var src = p.hojas || p.sheets || p.data || p;
+    if (Array.isArray(src)) return { 'Datos': src };
+    var out = {}, n = 0;
+    Object.keys(src).forEach(function (k) { if (Array.isArray(src[k])) { out[k] = src[k]; n++; } });
+    if (!n) throw new Error('La respuesta no contiene filas de ninguna pestaña.');
+    return out;
+  }
+  function toObjects(rows) {                    // por si llegan filas como arreglos
+    if (!rows.length || !Array.isArray(rows[0])) return rows;
+    var head = rows[0].map(function (h) { return String(h).trim(); });
+    return rows.slice(1).map(function (r) { var o = {}; head.forEach(function (h, i) { if (h) o[h] = r[i]; }); return o; });
+  }
+  function pickMain(h) {
+    var names = Object.keys(h), best = null;
+    names.forEach(function (n) { if (!best && normKey(n).indexOf('MOVIMIENTOS') > -1) best = n; });
+    if (best) return best;
+    return names.sort(function (a, b) { return h[b].length - h[a].length; })[0];
+  }
+  function colsOf(rows) {
+    var set = {}, order = [];
+    rows.slice(0, 300).forEach(function (r) { Object.keys(r).forEach(function (k) { if (!set[k]) { set[k] = 1; order.push(k); } }); });
+    return order;
+  }
+  function findCol(cols, group) {
+    var keys = cols.map(function (c) { return [c, normKey(c)]; });
+    var cands = [normKey(group[0])].concat(group.slice(1).map(normKey)), i, k;
+    for (i = 0; i < cands.length; i++) for (k = 0; k < keys.length; k++) if (keys[k][1] === cands[i]) return keys[k][0];
+    for (i = 0; i < cands.length; i++) for (k = 0; k < keys.length; k++) if (keys[k][1].indexOf(cands[i]) === 0) return keys[k][0];
+    return null;
+  }
+
+  /* ---------- guardado y aviso a las otras hojas ---------- */
+  function persist(main, extras) {
+    var s = JSON.stringify(main), old = null, changed;
+    try { old = localStorage.getItem(K_DATA); } catch (e) {}
+    changed = s !== old;
+    if (changed) {
+      try { localStorage.setItem(K_DATA, s); }
+      catch (e) { throw new Error('Los datos superan el espacio que permite el navegador (≈5 MB). Reduce filas o columnas en la hoja.'); }
+    }
+    try {
+      if (Object.keys(extras).length) localStorage.setItem(K_EXTRA, JSON.stringify(extras));
+      else localStorage.removeItem(K_EXTRA);
+    } catch (e) { try { localStorage.removeItem(K_EXTRA); } catch (x) {} }
+    return changed;
+  }
+  function publish(meta) {
+    try { localStorage.setItem(K_META, JSON.stringify(meta)); } catch (e) {}
+    if (chan) { try { chan.postMessage({ type: 'slots-data', ts: meta.ts, ok: meta.ok, changed: !!meta.changed, rows: meta.rows }); } catch (e) {} }
+  }
+
+  /* ---------- sincronizar ---------- */
+  function sync(origin) {
+    if (running) return;
+    running = true;
+    el.btn.disabled = true;
+    var cfg = readCfg();
+    setState('load', 'Actualizando datos…', 'Consultando Google Sheets');
+    var prev = jget(K_META) || {};
+
+    fetchJson(cfg).then(function (payload) {
+      var hojas = toHojas(payload), names = Object.keys(hojas), tabs = [];
+      names.forEach(function (n) { hojas[n] = toObjects(hojas[n]); });
+      var mainName = pickMain(hojas), main = hojas[mainName];
+      if (!main.length) throw new Error('La pestaña "' + mainName + '" no tiene filas.');
+      var extras = {};
+      names.forEach(function (n) {
+        if (n !== mainName) extras[n] = hojas[n];
+        tabs.push({ name: n, rows: hojas[n].length, cols: colsOf(hojas[n]) });
+      });
+      var changed = persist(main, extras);
+      var meta = { ts: Date.now(), tryTs: Date.now(), ok: true, changed: changed, rows: main.length, main: mainName, tabs: tabs, url: cfg.url, error: '' };
+      publish(meta);
+      finish(meta);
+    }).catch(function (e) {
+      var meta = { ts: prev.ts || 0, tryTs: Date.now(), ok: false, changed: false, rows: prev.rows || 0, main: prev.main || '', tabs: prev.tabs || [], url: cfg.url, error: (e && e.message) || String(e) };
+      try { localStorage.setItem(K_META, JSON.stringify(meta)); } catch (x) {}
+      finish(meta);
+    });
+  }
+  function finish(meta) {
+    running = false;
+    el.btn.disabled = false;
+    renderAll(meta);
+  }
+
+  /* ---------- pintado ---------- */
+  function renderAll(meta) {
+    renderStatus(meta);
+    renderDetail(meta);
+  }
+  function renderStatus(meta) {
+    if (running) return;
+    var cfg = readCfg();
+    if (meta && meta.ok) {
+      var txt = fmtN(meta.rows) + ' filas · ' + fmtT(meta.ts);
+      if (meta.changed === false) txt += ' · sin cambios';
+      setState('ok', 'Datos actualizados', txt + nextTxt(cfg, meta));
+    } else if (meta && meta.error) {
+      var keep = meta.ts ? ' Se siguen mostrando los datos de ' + fmtT(meta.ts) + '.' : '';
+      setState('err', 'No se pudo actualizar', meta.error + keep);
+    } else {
+      setState('idle', 'Datos sin sincronizar', 'Pulsa Actualizar para traer los datos.');
+    }
+  }
+  function nextTxt(cfg, meta) {
+    if (!cfg.interval) return ' · solo manual';
+    var base = meta.ok ? meta.ts : meta.tryTs, wait = (meta.ok ? cfg.interval : Math.min(cfg.interval, 5)) * 60000;
+    return ' · próxima en ' + fmtLeft(base + wait - Date.now());
+  }
+  function renderDetail(meta) {
+    var tabs = (meta && meta.tabs) || [];
+    if (!tabs.length) {
+      el.tabs.innerHTML = '<div class="sd-empty">Todavía no hay datos cargados.</div>';
+      el.dash.innerHTML = ''; el.colsWrap.hidden = true;
+      return;
+    }
+    el.tabs.innerHTML = tabs.map(function (t) {
+      return '<div class="sd-tab"><div><b>' + esc(t.name) + '</b>' + (t.name === meta.main ? '<em>Principal</em>' : '') + '</div><span>' + fmtN(t.rows) + ' filas · ' + t.cols.length + ' columnas</span></div>';
+    }).join('');
+    var mainTab = tabs.filter(function (t) { return t.name === meta.main; })[0] || tabs[0];
+    var cols = mainTab.cols, used = {};
+    el.dash.innerHTML = DASH.map(function (d) {
+      var miss = [], ok = 0;
+      d.req.forEach(function (g) {
+        var c = findCol(cols, g);
+        if (c) { ok++; used[c] = 1; } else miss.push(g[0]);
+      });
+      var good = !miss.length;
+      return '<li style="--a:' + d.color + '"' + (good ? '' : ' class="warn"') + '><b>' + esc(d.name) + '</b><span>' +
+        (good ? '✓ Todas las columnas encontradas (' + ok + ')' : '⚠ ' + ok + ' de ' + d.req.length + ' columnas') + '</span>' +
+        (good ? '' : '<small>Falta: ' + miss.map(esc).join(', ') + '</small>') + '</li>';
+    }).join('');
+    el.cols.innerHTML = cols.map(function (c) { return '<i' + (used[c] ? ' class="used"' : '') + '>' + esc(c) + '</i>'; }).join('');
+    el.colsWrap.hidden = false;
+  }
+
+  /* ---------- planificador (auto-actualización) ---------- */
+  function tick() {
+    if (running) return;
+    var cfg = readCfg(), meta = jget(K_META);
+    if (!meta) { sync('inicio'); return; }
+    if (!cfg.interval) { renderStatus(meta); return; }
+    var base = meta.ok ? meta.ts : (meta.tryTs || 0);
+    var wait = (meta.ok ? cfg.interval : Math.min(cfg.interval, 5)) * 60000;
+    if (Date.now() >= base + wait) { sync('auto'); return; }
+    renderStatus(meta);
+  }
+
+  /* ---------- eventos ---------- */
+  el.btn.addEventListener('click', function () { sync('manual'); });
+  el.sel.addEventListener('change', function () {
+    var c = readCfg(); c.interval = Number(el.sel.value); writeCfg(c);
+    tick();
+  });
+  el.more.addEventListener('click', function () {
+    var open = el.detail.hidden;
+    el.detail.hidden = !open;
+    el.more.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  el.save.addEventListener('click', function () {
+    var u = el.url.value.trim();
+    if (!/^https:\/\/.+/i.test(u)) { setState('err', 'URL no válida', 'Pega la URL completa de la implementación (https://script.google.com/…/exec).'); return; }
+    var c = readCfg(); c.url = u; c.token = el.token.value.trim(); writeCfg(c);
+    sync('config');
+  });
+  el.reset.addEventListener('click', function () {
+    var c = readCfg(); c.url = DEFAULT_URL; c.token = ''; writeCfg(c);
+    el.url.value = DEFAULT_URL; el.token.value = '';
+    sync('config');
+  });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) tick(); });
+  window.addEventListener('storage', function (e) {            // otra pestaña actualizó
+    if (e.key === K_META && !running) { var m = jget(K_META); if (m) renderAll(m); }
+  });
+
+  /* ---------- arranque ---------- */
+  var cfg0 = readCfg();
+  el.url.value = cfg0.url; el.token.value = cfg0.token;
+  el.sel.value = String(cfg0.interval);
+  if (el.sel.value !== String(cfg0.interval)) {               // intervalo guardado que no está en la lista
+    var o = document.createElement('option'); o.value = String(cfg0.interval); o.textContent = 'Cada ' + cfg0.interval + ' min';
+    el.sel.appendChild(o); el.sel.value = String(cfg0.interval);
+  }
+  var meta0 = jget(K_META);
+  if (meta0) renderAll(meta0);
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
+<script>
+/* Panel de actualización oculto: se muestra/oculta tecleando la secuencia secreta (fuera de campos de texto) */
+(function () {
+  var SECRET = 'x7k2m9qz';                       // <-- cambia esta secuencia si quieres otra
+  var box = document.getElementById('sync'), buf = '';
+  if (!box) return;
+  document.addEventListener('keydown', function (e) {
+    var t = e.target, tag = t && t.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+    if (e.ctrlKey || e.altKey || e.metaKey || !e.key || e.key.length !== 1) return;
+    buf = (buf + e.key.toLowerCase()).slice(-SECRET.length);
+    if (buf === SECRET) {
+      buf = '';
+      box.classList.toggle('sync-locked');
+      if (!box.classList.contains('sync-locked')) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
 })();
 </script>
 </body>
