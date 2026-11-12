@@ -558,22 +558,6 @@
   .photo-no-img svg { width: 52px; height: 52px; opacity: .5; color: var(--c-warn); }
   .photo-no-img span { font-size: 1.15rem; font-weight: 700; color: var(--ink); }
 
-
-  /* Estado de actualización automática (pie) */
-  .foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 18px; padding: 8px 2px 4px; font-size: .78rem; color: var(--ink-soft); }
-  .live { display: inline-flex; align-items: center; gap: 9px; }
-  .live i { width: 8px; height: 8px; border-radius: 50%; background: #71839F; box-shadow: 0 0 0 3px rgba(113,131,159,.22); }
-  .live[data-st="ok"] i { background: #5BD667; box-shadow: 0 0 0 3px rgba(91,214,103,.22); }
-  .live[data-st="load"] i { background: #C77DFF; box-shadow: 0 0 0 3px rgba(199,125,255,.25); animation: livePulse 1s ease-in-out infinite; }
-  .live[data-st="err"] i { background: #FF7B7B; box-shadow: 0 0 0 3px rgba(255,123,123,.25); }
-  .live[data-st="err"] #liveTxt { color: #FFB4B4; }
-  @keyframes livePulse { 50% { transform: scale(1.4); } }
-  .live button { display: inline-flex; align-items: center; gap: 6px; font: 700 .76rem var(--font, inherit); color: var(--ink); padding: 6px 11px; border-radius: 9px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.05); cursor: pointer; transition: background .2s, border-color .2s; }
-  .live button:hover:not(:disabled) { background: rgba(199,125,255,.16); border-color: rgba(199,125,255,.6); }
-  .live button:disabled { opacity: .6; cursor: progress; }
-  .live button svg { width: 14px; height: 14px; }
-  .live[data-st="load"] button svg { animation: liveSpin .8s linear infinite; }
-  @keyframes liveSpin { to { transform: rotate(360deg); } }
 </style>
 </head>
 
@@ -665,10 +649,6 @@
   <!-- ============ PIE ============ -->
   <footer class="foot">
     <span id="ver"></span>
-    <span class="live" id="liveSync" data-st="idle">
-      <i aria-hidden="true"></i><span id="liveTxt">Sin sincronizar</span>
-      <button type="button" id="liveBtn" aria-label="Actualizar datos ahora" title="Actualizar datos ahora"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 12A9 9 0 0 1 18.5 5.8L21 8"/><path d="M21 3v5h-5"/><path d="M3 21v-5h5"/></svg>Actualizar</button>
-    </span>
   </footer>
 </div>
 
@@ -726,7 +706,7 @@ const PHOTO_MAP = new Map([
 
 // Si Index.html tiene un Excel más reciente guardado en el navegador, actualiza
 // el mapa de fotos por NOTROS sin alterar la cantidad ni los datos de movimientos de esta página.
-function loadPhotoMapFromExcelStorage() {
+(function loadPhotoMapFromExcelStorage() {
   try {
     const raw = localStorage.getItem('slots_data_movimientos');
     if (!raw) return;
@@ -755,114 +735,8 @@ function loadPhotoMapFromExcelStorage() {
   } catch (e) {
     console.warn('No se pudo leer el mapa de fotos del Excel; se usa el mapa incluido.', e);
   }
-}
-loadPhotoMapFromExcelStorage();
-
-/* Convierte las filas crudas de Google Sheets en la estructura compacta de este tablero.
-   Fila = [fecha, artículo, ubicación, custodio, tipo de movimiento, estado documental, notros, cantidad,
-           tipo de asignación, estado, recepcionista, usuario de carga]
-   Los encabezados se reconocen sin importar mayúsculas, tildes, espacios o guiones. */
-const normKey = s => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-function buildFromRaw(raw) {
-  if (!Array.isArray(raw) || !raw.length) return null;
-  const keys = new Map();
-  raw.slice(0, 300).forEach(f => Object.keys(f).forEach(k => { const n = normKey(k); if (!keys.has(n)) keys.set(n, k); }));
-  const exact = (...c) => { for (const n of c) if (keys.has(n)) return keys.get(n); return null; };
-  const prefix = (...c) => {                                   // exacto primero; si no, "empieza con"
-    const e = exact(...c); if (e) return e;
-    for (const n of c) for (const [nk, k] of keys) if (nk.startsWith(n)) return k;
-    return null;
-  };
-  const kF = exact('FECHA'), kArt = exact('ARTCOD'), kDes = exact('DESPRO'), kDt = exact('DESTIP', 'DESCRIPCIONTIPO', 'DESTIPPRO', 'TIPPRO'),
-        kCod = exact('ESTABLECIMIENTO', 'CODIGO', 'CODEMP'), kCF = exact('CODFOR'), kEd = exact('EDIFIC'), kPi = exact('PISO'), kLu = exact('LUGAR'), kCu = exact('CUSTODIO'),
-        kNo = exact('NOTROS'), kCa = exact('CANTIDAD'),
-        kTm = exact('TIPODEMOVIMIENTO', 'TIPOMOVIMIENTO', 'TIPMOV', 'TIPOMOV', 'MOVIMIENTO', 'TIPOMOVIM'),
-        kAs = exact('TIPODEASIGNACION', 'TIPOASIGNACION', 'TIPASIGNACION', 'TIPOASIG', 'ASIGNACION', 'TIPASIG'),
-        kEA = exact('ESTADODEASIGNACION', 'ESTADOASIGNACION'), kEs = exact('ESTADO', 'ESTADOACTIVO', 'ESTADOBIEN'),
-        kRe = exact('RECEPCIONISTAID', 'RECEPCIONISTA', 'IDRECEPCIONISTA', 'RECEPID'),
-        kUc = exact('USUARIODECARGA', 'USUARIOCARGA', 'USUARIOWEB', 'USUARIO'),
-        kNF = prefix('NROFORLIMPIO', 'NROFOR', 'NUMFOR', 'NFOR'),
-        kOC = prefix('ORDENDECOMPRALIMPIA', 'ORDENDECOMPRA', 'ORDENCOMPRA', 'NROORDENDECOMPRA', 'NROORDENCOMPRA', 'NROOC', 'OC'),
-        kED = prefix('ESTADODOCUMENTAL', 'ESTADODOC');
-  const val = (f, k) => (k ? f[k] : undefined);
-  const S = x => String(x ?? '').trim();
-  const SD = 'Sin dato', SU = 'Sin ubicación';
-
-  const dateOf = v => {
-    if (typeof v === 'number') return new Date(Math.round((v - 25569) * 86400 * 1000)).toISOString().split('T')[0];
-    if (v instanceof Date) return v.toISOString().split('T')[0];
-    if (typeof v === 'string' && v.trim()) {
-      const s = v.trim(), m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
-      if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
-      return s.split('T')[0].split(' ')[0];
-    }
-    return '';
-  };
-  const docClean = v => {
-    let s = S(v);
-    if (/^-?\d+\.0+$/.test(s)) s = s.replace(/\.0+$/, '');
-    return (!s || /^(sin dato|null|undefined|nan|-|0)$/i.test(s)) ? '' : s;
-  };
-  const estadoDoc = (v, nf, oc) => {                           // igual criterio que el tablero de Calidad
-    const s = v == null ? '' : normKey(v);
-    if (s.startsWith('INCOMPLET')) return 'Incompleto';
-    if (s.startsWith('COMPLET')) return 'Completo';
-    if (s.startsWith('SINDOC')) return 'Sin documento';
-    return nf && oc ? 'Completo' : (nf || oc) ? 'Incompleto' : 'Sin documento';
-  };
-
-  // El Excel no trae la columna "Tipo de Movimiento": se deduce del código de formulario (CODFOR)
-  // y, si es desconocido, del signo de la cantidad (+ Ingreso / − Entrega).
-  const tipoMov = (f, cant) => {
-    const t = S(val(f, kTm)); if (t) return t;
-    const c = S(val(f, kCF)).toUpperCase();
-    if (c === 'IRL') return 'Ingreso';
-    if (c === 'WEB') return 'Entrega';
-    if (c === 'AE')  return 'Recepción';
-    return cant > 0 ? 'Ingreso' : cant < 0 ? 'Entrega' : SD;
-  };
-  const tipoAsig = v => { v = S(v); return /^0*1$/.test(v) ? 'Normal' : v; };   // "01" = Normal (igual que el Power BI)
-
-  const dArts = new Map(), dUbs = new Map(), dCusts = new Map(), dTipos = new Map(), dNot = new Map();
-  const arts = [], ubs = [], custs = [], tipos = [], notros = [], estados = ['Completo', 'Incompleto', 'Sin documento'];
-  const getIdx = (map, arr, v) => { v = S(v); if (!map.has(v)) { map.set(v, arr.length); arr.push(v); } return map.get(v); };
-  const ubIdx = (cod, edif, piso, lugar) => {
-    const a = [S(cod) || SU, S(edif) || SU, S(piso) || SU, S(lugar) || SU], key = a.join('|');
-    if (!dUbs.has(key)) { dUbs.set(key, ubs.length); ubs.push(a); }
-    return dUbs.get(key);
-  };
-
-  const rows = [], dates = [];
-  raw.forEach(f => {
-    const artCode = S(val(f, kArt)) || 'S/D', artDesc = S(val(f, kDes)), artTip = S(val(f, kDt));
-    const keyArt = `${artCode}|${artDesc}|${artTip}`;
-    if (!dArts.has(keyArt)) { dArts.set(keyArt, arts.length); arts.push([artCode, artDesc, artTip]); }
-    const q = val(f, kCa);
-    const cant = typeof q === 'number' ? q : (q === '' || q == null ? null : (Number(String(q).replace(',', '.')) || 0));
-    const fecha = dateOf(val(f, kF)); if (fecha) dates.push(fecha);
-    const est = estadoDoc(kED ? f[kED] : null, !!docClean(val(f, kNF)), !!docClean(val(f, kOC)));
-    rows.push([
-      fecha || '2000-01-01', dArts.get(keyArt),
-      ubIdx(val(f, kCod), val(f, kEd), val(f, kPi), val(f, kLu)),
-      getIdx(dCusts, custs, val(f, kCu)), getIdx(dTipos, tipos, tipoMov(f, cant)),
-      estados.indexOf(est), getIdx(dNot, notros, val(f, kNo)), cant,
-      tipoAsig(val(f, kAs)), S(val(f, kEA)) || S(val(f, kEs)), S(val(f, kRe)), S(val(f, kUc))
-    ]);
-  });
-  dates.sort();
-  return { version: 'Sincronizado desde Google Sheets', arts, ubs, custs, tipos, estados, notros, rows,
-    slCust: custs.map((c, i) => c ? i : -1).filter(i => i >= 0),
-    minDate: dates[0] || '2000-01-01', maxDate: dates[dates.length - 1] || '2099-12-31' };
-}
-
-// Al abrir la hoja: si ya hay datos sincronizados en el navegador, se usan; si no, los de respaldo.
-try {
-  const stored = JSON.parse(localStorage.getItem('slots_data_movimientos') || 'null');
-  const built = buildFromRaw(stored);
-  if (built) { DATA = built; console.log('Trazabilidad: datos de Google Sheets', stored.length, 'filas'); }
-} catch (e) { console.error('Trazabilidad: no se pudo leer los datos sincronizados; se usa el respaldo.', e); }
-
-let { arts: ARTS, ubs: UBS, custs: CUSTS, tipos: TIPOS, estados: ESTADOS, notros: NOTROS, rows: ROWS } = DATA;
+})();
+const { arts: ARTS, ubs: UBS, custs: CUSTS, tipos: TIPOS, estados: ESTADOS, notros: NOTROS, rows: ROWS } = DATA;
 const SIN_DOC = 'Sin documento';
 
 /* ---------- utilidades ---------- */
@@ -1017,7 +891,7 @@ function notItems() {
   state.not.forEach(v => seen.add(v));
   return [...seen].sort((a, b) => collator.compare(a, b)).map(v => ({ value: v, label: v }));
 }
-let ddFecha = makeDate($('#ddFecha'));
+makeDate($('#ddFecha'));
 makeMulti({ el: $('#ddNot'), label: 'Nro Serie Softland', set: state.not, getItems: notItems });
 makeMulti({ el: $('#ddCust'), label: 'Custodio', set: state.cust, display: titleCase,
   getItems: () => DATA.slCust.map(i => ({ value: i, label: CUSTS[i] })).sort((a, b) => collator.compare(a.label, b.label)) });
@@ -1417,23 +1291,6 @@ function update() {
 $('#ver').textContent = 'Versión ' + DATA.version;
 update();
 
-/* Datos nuevos desde Google Sheets: se reconstruye todo y se mantienen los filtros activos */
-function applyRaw(rawRows) {
-  const nd = buildFromRaw(rawRows);
-  if (!nd) return;
-  const custNames = [...state.cust].map(i => CUSTS[i]);            // el filtro de custodio guarda posiciones: se traducen por nombre
-  DATA = nd;
-  ({ arts: ARTS, ubs: UBS, custs: CUSTS, tipos: TIPOS, estados: ESTADOS, notros: NOTROS, rows: ROWS } = DATA);
-  state.cust.clear();
-  custNames.forEach(n => { const i = CUSTS.indexOf(n); if (i >= 0) state.cust.add(i); });
-  const k = dropdowns.indexOf(ddFecha); if (k >= 0) dropdowns.splice(k, 1);
-  ddFecha = makeDate($('#ddFecha'));                                // recalcula meses y rango de fechas
-  loadPhotoMapFromExcelStorage();
-  $('#ver').textContent = 'Versión ' + DATA.version;
-  update();
-}
-window.SLOTS_ON_DATA = applyRaw;
-
 /* ================================================================
    Navegación con transición circular
    ================================================================ */
@@ -1454,167 +1311,6 @@ document.querySelectorAll('.btn[data-color], .pager a').forEach(a => {
     setTimeout(() => { location.href = a.href; }, 520);
   });
 });
-</script>
-<script>
-/* ============================================================
-   ACTUALIZACIÓN AUTOMÁTICA · Google Sheets (Apps Script)
-   Usa la misma configuración y los mismos datos que el Index
-   (slots_sync_cfg / slots_data_movimientos / slots_sync_meta).
-   Cuando llegan datos nuevos (desde esta hoja o desde otra
-   pestaña) llama a window.SLOTS_ON_DATA(filasCrudas).
-   ============================================================ */
-(function () {
-  'use strict';
-  var DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbx31zV48QnUtMBW1JGwNqb5gdDz7-t3admyMenYISxP0ln3GI9gptuXVIbTyfHuSEmvvw/exec';
-  var DEFAULT_INTERVAL = 60;
-  var K_DATA = 'slots_data_movimientos', K_EXTRA = 'slots_data_extras', K_META = 'slots_sync_meta', K_CFG = 'slots_sync_cfg';
-  var running = false, lastEmit = 0, chan = null;
-  try { chan = ('BroadcastChannel' in window) ? new BroadcastChannel('slots-data') : null; } catch (e) {}
-
-  var $ = function (id) { return document.getElementById(id); };
-  function jget(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
-  function normKey(s) { return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
-  function fmtT(ts) { return new Date(ts).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
-  function fmtLeft(ms) {
-    var s = Math.max(0, Math.round(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-    return h ? h + ' h ' + m + ' min' : m ? m + ' min' : (s % 60) + ' s';
-  }
-  function readCfg() {
-    var c = jget(K_CFG) || {}, iv = Number(c.interval);
-    return { url: (c.url && String(c.url).trim()) || DEFAULT_URL, token: c.token ? String(c.token).trim() : '',
-             interval: (c.interval !== undefined && c.interval !== null && isFinite(iv)) ? iv : DEFAULT_INTERVAL };
-  }
-
-  function fetchJson(cfg) {
-    var url = cfg.url + (cfg.url.indexOf('?') > -1 ? '&' : '?') + '_=' + Date.now();
-    if (cfg.token) url += '&token=' + encodeURIComponent(cfg.token);
-    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    var to = setTimeout(function () { if (ctrl) ctrl.abort(); }, 90000);
-    return fetch(url, { cache: 'no-store', redirect: 'follow', signal: ctrl ? ctrl.signal : undefined })
-      .then(function (r) { clearTimeout(to); if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-      .then(function (t) {
-        var s = t.trim();
-        if (s.charAt(0) === '<') throw new Error('La URL devolvió una página web en lugar de datos (revisa el acceso "Cualquier persona" y que termine en /exec).');
-        try { return JSON.parse(s); } catch (e) { throw new Error('La respuesta no es un JSON válido.'); }
-      })
-      .catch(function (e) {
-        clearTimeout(to);
-        if (e && e.name === 'AbortError') throw new Error('Tiempo de espera agotado.');
-        if (e instanceof TypeError) throw new Error('No se pudo conectar con Apps Script.');
-        throw e;
-      });
-  }
-  function toHojas(p) {
-    if (Array.isArray(p)) return { 'Datos': p };
-    if (!p || typeof p !== 'object') throw new Error('Respuesta inesperada del script.');
-    if (p.ok === false) throw new Error(p.error || 'El script devolvió un error.');
-    var src = p.hojas || p.sheets || p.data || p;
-    if (Array.isArray(src)) return { 'Datos': src };
-    var out = {}, n = 0;
-    Object.keys(src).forEach(function (k) { if (Array.isArray(src[k])) { out[k] = src[k]; n++; } });
-    if (!n) throw new Error('La respuesta no contiene filas.');
-    return out;
-  }
-  function toObjects(rows) {
-    if (!rows.length || !Array.isArray(rows[0])) return rows;
-    var head = rows[0].map(function (h) { return String(h).trim(); });
-    return rows.slice(1).map(function (r) { var o = {}; head.forEach(function (h, i) { if (h) o[h] = r[i]; }); return o; });
-  }
-  function pickMain(h) {
-    var names = Object.keys(h), best = null;
-    names.forEach(function (n) { if (!best && normKey(n).indexOf('MOVIMIENTOS') > -1) best = n; });
-    return best || names.sort(function (a, b) { return h[b].length - h[a].length; })[0];
-  }
-  function colsOf(rows) {
-    var set = {}, order = [];
-    rows.slice(0, 300).forEach(function (r) { Object.keys(r).forEach(function (k) { if (!set[k]) { set[k] = 1; order.push(k); } }); });
-    return order;
-  }
-
-  function loadRows() {
-    var a = jget(K_DATA);
-    return Array.isArray(a) && a.length ? a : null;
-  }
-  function emit(meta) {
-    if (!meta || meta.ts === lastEmit) return;
-    lastEmit = meta.ts;
-    var rows = loadRows();
-    if (rows && typeof window.SLOTS_ON_DATA === 'function') {
-      try { window.SLOTS_ON_DATA(rows, meta); } catch (e) { console.error('Error al aplicar datos nuevos:', e); }
-    }
-  }
-
-  function sync() {
-    if (running) return;
-    running = true; ui();
-    var cfg = readCfg(), prev = jget(K_META) || {};
-    fetchJson(cfg).then(function (payload) {
-      var hojas = toHojas(payload), names = Object.keys(hojas), tabs = [], extras = {};
-      names.forEach(function (n) { hojas[n] = toObjects(hojas[n]); });
-      var mainName = pickMain(hojas), main = hojas[mainName];
-      if (!main.length) throw new Error('La pestaña "' + mainName + '" no tiene filas.');
-      names.forEach(function (n) { if (n !== mainName) extras[n] = hojas[n]; tabs.push({ name: n, rows: hojas[n].length, cols: colsOf(hojas[n]) }); });
-      var s = JSON.stringify(main), old = null, changed;
-      try { old = localStorage.getItem(K_DATA); } catch (e) {}
-      changed = s !== old;
-      if (changed) {
-        try { localStorage.setItem(K_DATA, s); }
-        catch (e) { throw new Error('Los datos superan el espacio del navegador (≈5 MB).'); }
-      }
-      try { if (Object.keys(extras).length) localStorage.setItem(K_EXTRA, JSON.stringify(extras)); else localStorage.removeItem(K_EXTRA); } catch (e) {}
-      var meta = { ts: Date.now(), tryTs: Date.now(), ok: true, changed: changed, rows: main.length, main: mainName, tabs: tabs, url: cfg.url, error: '' };
-      try { localStorage.setItem(K_META, JSON.stringify(meta)); } catch (e) {}
-      if (chan) { try { chan.postMessage({ type: 'slots-data', ts: meta.ts, ok: true, changed: changed, rows: meta.rows }); } catch (e) {} }
-      running = false;
-      if (changed) emit(meta); else lastEmit = meta.ts;
-      ui();
-    }).catch(function (e) {
-      var meta = { ts: prev.ts || 0, tryTs: Date.now(), ok: false, changed: false, rows: prev.rows || 0, main: prev.main || '', tabs: prev.tabs || [], url: cfg.url, error: (e && e.message) || String(e) };
-      try { localStorage.setItem(K_META, JSON.stringify(meta)); } catch (x) {}
-      running = false; ui();
-    });
-  }
-
-  function ui() {
-    var box = $('liveSync'), txt = $('liveTxt'), btn = $('liveBtn');
-    if (!box || !txt) return;
-    var cfg = readCfg(), m = jget(K_META), st, t, tip = '';
-    if (running) { st = 'load'; t = 'Actualizando…'; }
-    else if (m && m.ok) {
-      st = 'ok'; t = 'Actualizado ' + fmtT(m.ts) + (cfg.interval ? ' · próxima en ' + fmtLeft(m.ts + cfg.interval * 60000 - Date.now()) : ' · solo manual');
-    } else if (m && m.error) {
-      st = 'err'; t = 'No se pudo actualizar' + (m.ts ? ' · datos de ' + fmtT(m.ts) : ''); tip = m.error;
-    } else { st = 'idle'; t = 'Sin sincronizar'; }
-    box.setAttribute('data-st', st);
-    txt.textContent = t; txt.title = tip;
-    if (btn) btn.disabled = running;
-  }
-  function tick() {
-    if (running) return;
-    var cfg = readCfg(), m = jget(K_META);
-    if (!m) { sync(); return; }
-    if (cfg.interval) {
-      var base = m.ok ? m.ts : (m.tryTs || 0), wait = (m.ok ? cfg.interval : Math.min(cfg.interval, 5)) * 60000;
-      if (Date.now() >= base + wait) { sync(); return; }
-    }
-    ui();
-  }
-
-  window.addEventListener('storage', function (e) {          // otra pestaña (p. ej. el Index) actualizó
-    if (e.key === K_META) { var m = jget(K_META); if (m && m.ok && m.changed) emit(m); ui(); }
-  });
-  if (chan) chan.onmessage = function (e) {
-    var d = e.data || {};
-    if (d.type === 'slots-data' && d.ok && d.changed) emit({ ts: d.ts });
-    ui();
-  };
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) tick(); });
-  var btn = $('liveBtn'); if (btn) btn.addEventListener('click', sync);
-
-  var m0 = jget(K_META); if (m0 && m0.ts) lastEmit = m0.ts;   // lo ya cargado al abrir la hoja no se reaplica
-  ui(); tick(); setInterval(tick, 1000);
-  window.SlotsLive = { sync: sync };
-})();
 </script>
 <script>
 window.SLOTS_XMAS_SWITCH = false;
@@ -2021,9 +1717,4 @@ window.SLOTS_XMAS_SWITCH = false;
 })();
 
 </script>
-
-<!-- Tema patrio 25 de Mayo: compartido por todas las páginas mediante 25demayo.js -->
-<script src="25demayo.js"></script>
-
 </body>
-</html>
