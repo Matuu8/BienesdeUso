@@ -619,9 +619,11 @@ function buildFromRaw(raw) {
   raw.slice(0, 300).forEach(f => Object.keys(f).forEach(k => { const n = normKey(k); if (!keys.has(n)) keys.set(n, k); }));
   const K = n => keys.get(n);
   const kF = K('FECHA'), kArt = K('ARTCOD'), kDes = K('DESPRO'), kCod = K('CODEMP'), kEd = K('EDIFIC'), kPi = K('PISO'),
-        kLu = K('LUGAR'), kCu = K('CUSTODIO'), kUs = K('USUARIOWEB'), kTi = K('TIPPRO'), kNo = K('NOTROS'), kCa = K('CANTIDAD');
+        kLu = K('LUGAR'), kCu = K('CUSTODIO'), kUs = K('USUARIOWEB'), kTi = K('TIPPRO'), kNo = K('NOTROS'), kCa = K('CANTIDAD'),
+        kId = K('ID'), kCg = K('CODIGO'), kEA = K('ESTADODEASIGNACION'), kEs = K('ESTADO'), kRc = K('RECEPCIONISTAID');
   const val = (f, k) => (k ? f[k] : undefined);
   const S = x => String(x ?? '').trim();
+  const N0 = x => { const t = S(x); return t.toUpperCase() === 'NULL' ? '' : t; };   // 'NULL' de texto = vacío
 
   const dateOf = v => {
     if (typeof v === 'number') return new Date(Math.round((v - 25569) * 86400 * 1000)).toISOString().split('T')[0];
@@ -654,9 +656,12 @@ function buildFromRaw(raw) {
     const cant = typeof q === 'number' ? q : (Number(String(q ?? '').replace(',', '.')) || 0);
     rows.push([
       dateOf(val(f, kF)), dArts.get(keyArt),
-      getUbIdx(val(f, kCod), val(f, kEd), val(f, kPi), val(f, kLu)),
+      getUbIdx(val(f, kCg || kCod), val(f, kEd), val(f, kPi), val(f, kLu)),   // CODIGO = establecimiento (si el feed no trae CODIGO se mantiene el comportamiento anterior)
       getIdx(dCusts, custs, val(f, kCu)), getIdx(dUsers, users, val(f, kUs)),
-      getIdx(dTipos, tipos, val(f, kTi)), getIdx(dNotros, notros, val(f, kNo)), cant
+      getIdx(dTipos, tipos, val(f, kTi)), getIdx(dNotros, notros, val(f, kNo)), cant,
+      // 8: ID · 9: CODEMP (empresa) · 10: Estado_de_Asignacion · 11: Estado · 12: Recepcionista
+      (() => { const v = val(f, kId); if (v === undefined || v === null || v === '') return null; const n = Number(v); return isNaN(n) ? null : n; })(),
+      kCg ? N0(val(f, kCod)) : '', N0(val(f, kEA)), N0(val(f, kEs)), N0(val(f, kRc))
     ]);
   });
   return { version: 'Sincronizado desde Google Sheets', arts, ubs, custs, users, tipos, notros, rows, sinUb: 0, minDate: '2000-01-01', maxDate: '2099-12-31' };
@@ -689,18 +694,58 @@ const ICON_CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 const ICON_ARR = '<svg class="arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>';
 
 /* ================================================================
-   MEDIDAS DAX traducidas a JavaScript
-   Stock Neto            = SUM(CANTIDAD)
-   Saldo                 = [Stock Neto]
-   Ubicaciones con Stock = ubicaciones (distintas de "Sin ubicación") con Stock Neto > 0
-   Último ID Positivo    = NOTROS del último movimiento con CANTIDAD > 0 de cada fila
+   STOCK DE BIENES DE USO (criterio "último movimiento positivo")
+   - Un bien individual = CODEMP + NOTROS.
+   - Se ordenan sus movimientos por FECHA asc y, en empate, por ID asc.
+   - El registro vigente es el ÚLTIMO movimiento con CANTIDAD > 0: de ahí salen
+     artículo, ubicación (CODIGO, EDIFIC, PISO, LUGAR) y CUSTODIO.
+   - Un movimiento negativo (transferencia en tránsito) NO descuenta ni reemplaza
+     la ubicación: si el último movimiento del bien es negativo, el bien sigue en
+     stock con los datos de su último positivo y se marca "En tránsito".
+   - NO se suman positivos ni se calcula saldo neto. Una fila por bien.
+   - La trazabilidad (todos los movimientos) no se toca: ROWS conserva todo.
+   Campos de cada fila de ROWS: 0 fecha · 1 art · 2 ubicación · 3 custodio · 4 usuario ·
+   5 tipo · 6 NOTROS · 7 cantidad · 8 ID · 9 CODEMP · 10 Estado_de_Asignacion · 11 Estado · 12 Recepcionista
    ================================================================ */
-const netOf = rows => rows.reduce((a, r) => a + (r[7] || 0), 0);
-function ubicacionesConStock(rows) {
-  const m = new Map();
-  rows.forEach(r => { if (r[2] !== SIN_UB) m.set(r[2], (m.get(r[2]) || 0) + (r[7] || 0)); });
-  let n = 0; m.forEach(v => { if (v > 0) n++; });
-  return n;
+const SIT_VIG = 'Ubicación vigente', SIT_TRA = 'En tránsito', SIT_REV = 'Revisar salida';
+function claseSalida(m) {                       // clasifica un último movimiento negativo
+  const t = norm(((m[10] || '') + ' ' + (m[11] || '')).trim());
+  if (!t || t.includes('transito') || t.includes('asignado')) return SIT_TRA;   // transferencia pendiente de recepción
+  return SIT_REV;                                // baja definitiva / anulación / otro: tratamiento aparte
+}
+let _stockSrc = null, _stockAll = [], _sinPositivo = [];
+function computeStock() {
+  if (_stockSrc === ROWS) return _stockAll;
+  const map = new Map();
+  ROWS.forEach((r, idx) => {
+    const key = (r[9] || '') + '|' + r[6];
+    let a = map.get(key); if (!a) map.set(key, a = []);
+    a.push({ r, idx });
+  });
+  const out = [], sinPos = [];
+  const idOf = x => (x.r[8] == null ? x.idx : x.r[8]);
+  map.forEach(list => {
+    list.sort((x, y) => (x.r[0] < y.r[0] ? -1 : x.r[0] > y.r[0] ? 1 : (idOf(x) - idOf(y)) || (x.idx - y.idx)));
+    let pos = null;
+    for (let i = list.length - 1; i >= 0; i--) { if ((list[i].r[7] || 0) > 0) { pos = list[i].r; break; } }
+    const last = list[list.length - 1].r;
+    if (!pos) { sinPos.push({ notros: NOTROS[last[6]], emp: last[9] || '', movs: list.length }); return; }  // sin ningún positivo: no hay ubicación vigente
+    const neg = (last[7] || 0) < 0;
+    out.push({
+      f: pos[0], a: pos[1], u: pos[2], c: pos[3], saldo: pos[7], ult: pos[8] == null ? '' : pos[8],
+      notros: [NOTROS[pos[6]]], emp: pos[9] || '',
+      pend: neg, situ: neg ? claseSalida(last) : SIT_VIG,
+      rec: neg ? (last[12] || '') : '', fsal: neg ? last[0] : '', idsal: neg ? last[8] : null,
+      movs: list.length
+    });
+  });
+  _stockSrc = ROWS; _stockAll = out; _sinPositivo = sinPos;
+  return out;
+}
+function ubicacionesConStock(recs) {            // ubicaciones (distintas de "Sin ubicación") con al menos un bien en stock
+  const s = new Set();
+  recs.forEach(g => { if (g.u !== SIN_UB && g.saldo > 0) s.add(g.u); });
+  return s.size;
 }
 
 /* ---------- estado ---------- */
@@ -719,13 +764,13 @@ function allowedUbs(skip) {                                    // segmentaciones
   });
   return ok;
 }
-function filtered({ skipNot = false } = {}) {
+function filtered({ skipNot = false } = {}) {     // devuelve bienes en stock (un registro por NOTROS)
   const ub = allowedUbs();
-  return ROWS.filter(r =>
-    (!state.cust.size || state.cust.has(CUSTS[r[3]])) &&
-    (!state.art.size || state.art.has(ARTS[r[1]][0])) &&
-    (skipNot || !state.not.size || state.not.has(NOTROS[r[6]])) &&
-    ub.has(r[2])
+  return computeStock().filter(g =>
+    (!state.cust.size || state.cust.has(CUSTS[g.c])) &&
+    (!state.art.size || state.art.has(ARTS[g.a][0])) &&
+    (skipNot || !state.not.size || state.not.has(g.notros[0])) &&
+    ub.has(g.u)
   );
 }
 
@@ -802,7 +847,7 @@ function ubItems(f) {
 }
 function notItems() {
   const map = new Map();
-  filtered({ skipNot: true }).forEach(r => { const v = NOTROS[r[6]]; if (!map.has(v)) map.set(v, { value: v, label: v }); });
+  filtered({ skipNot: true }).forEach(g => { const v = g.notros[0]; if (!map.has(v)) map.set(v, { value: v, label: v }); });
   return withSelected(map, state.not).sort((a, b) => collator.compare(a.label, b.label));
 }
 const custLabel = x => x ? titleCase(x) : '(En blanco)';
@@ -852,7 +897,8 @@ function renderKPI(rows) {
 const COLS = [
   { k: 'fecha', t: 'Fecha', w: 7.4 }, { k: 'art', t: 'ARTCOD', w: 9.2 }, { k: 'notros', t: 'Nro Serie Softland', w: 9.2 }, { k: 'des', t: 'DESPRO', w: 13 },
   { k: 'cod', t: 'Establecimiento', w: 9.5 }, { k: 'edif', t: 'Edificio', w: 9.5 }, { k: 'piso', t: 'Piso', w: 8.5 }, { k: 'lugar', t: 'Ubicacion', w: 14 },
-  { k: 'cust', t: 'CUSTODIO', w: 12 }, { k: 'saldo', t: 'Saldo', num: true, w: 6.4 }, { k: 'ult', t: 'Último ID Positivo', w: 10.5 }
+  { k: 'cust', t: 'CUSTODIO', w: 12 }, { k: 'saldo', t: 'Saldo', num: true, w: 6.4 }, { k: 'ult', t: 'Último ID Positivo', w: 8.5 },
+  { k: 'situ', t: 'Situación', w: 11 }, { k: 'rec', t: 'Pendiente de recepción por', w: 12 }
 ];
 const hidden = new Set();
 const visCols = () => COLS.filter(c => !hidden.has(c.k));
@@ -867,38 +913,16 @@ const raw = (g, k) => {
     case 'cust': return CUSTS[g.c];
     case 'saldo': return g.saldo;
     case 'ult': return g.ult;
+    case 'situ': return g.situ;
+    case 'rec': return g.rec;
   }
 };
 const shownText = (g, k) => ['cod', 'edif', 'piso', 'lugar', 'cust'].includes(k) ? titleCase(raw(g, k)) : k === 'fecha' ? fmtDate(g.f) : (raw(g, k) ?? '');
 
-/* Último movimiento por bien + ubicación + custodio:
-   1) agrupa por bien (ARTCOD + Nro Serie Softland), establecimiento/edificio/piso/ubicación (u) y custodio;
-   2) ordena cada grupo cronológicamente (fecha y, a igualdad, el orden/ID del movimiento en los datos);
-   3) arrastra el saldo vigente movimiento a movimiento (nunca por debajo de 0, así una recepción
-      positiva final deja saldo 1 aunque haya salidas registradas antes de ella);
-   4) conserva solo el ÚLTIMO registro de cada grupo (sin sumar saldos de fechas distintas)
-      y lo muestra únicamente si su saldo vigente es > 0. */
-function groupRows(rows) {
-  const map = new Map();
-  rows.forEach((r, idx) => {
-    const key = r[1] + '|' + r[6] + '|' + r[2] + '|' + r[3];
-    let a = map.get(key); if (!a) map.set(key, a = []);
-    a.push({ r, idx });
-  });
-  const out = [];
-  map.forEach(list => {
-    list.sort((x, y) => (x.r[0] < y.r[0] ? -1 : x.r[0] > y.r[0] ? 1 : x.idx - y.idx));
-    let bal = 0, ult = '';
-    list.forEach(({ r }) => {
-      const q = r[7] || 0;
-      bal = Math.max(0, bal + q);
-      if (q > 0) ult = NOTROS[r[6]];
-    });
-    const last = list[list.length - 1].r;
-    if (bal > 0) out.push({ f: last[0], a: last[1], u: last[2], c: last[3], saldo: bal, ult, notros: NOTROS[last[6]] != null ? [NOTROS[last[6]]] : [] });
-  });
-  return out;
-}
+/* Cada elemento de `rows` ya es un bien (último movimiento positivo por CODEMP + NOTROS).
+   No se agrupa ni se suma nada: una fila por bien individual. */
+const groupRows = rows => rows.slice();
+const SIT_CLS = { [SIT_VIG]: 'b-rec', [SIT_TRA]: 'b-ent', [SIT_REV]: 'b-oth' };
 
 function buildTableHead() {
   const V = visCols(), tot = V.reduce((a, c) => a + c.w, 0);
@@ -970,6 +994,7 @@ function renderTable(rows) {
       const s = g.saldo;
       return '<tr>' + visCols().map(c => {
         if (c.k === 'saldo') return `<td class="num ${s == null ? '' : s > 0 ? 'pos' : s < 0 ? 'neg' : 'zero'}">${s == null ? '' : nf.format(s)}</td>`;
+        if (c.k === 'situ') { const tip = g.pend ? `Salida registrada el ${fmtDate(g.fsal)}${g.idsal != null ? ' (ID ' + g.idsal + ')' : ''}; mantiene la ubicación del último positivo` : 'Último movimiento positivo'; return `<td title="${esc(tip)}"><span class="badge-t ${SIT_CLS[g.situ] || 'b-oth'}">${esc(g.situ)}</span></td>`; }
         const txt = shownText(g, c.k);
         const cls = c.k === 'art' ? 'code' : (!txt ? 'dim' : '');
         return `<td class="${cls}" title="${esc(txt)}">${txt ? esc(txt) : '—'}</td>`;
@@ -979,7 +1004,8 @@ function renderTable(rows) {
   if (firstPaint) { tb.classList.add('fresh'); firstPaint = false; setTimeout(() => tb.classList.remove('fresh'), 1400); }
 
   if ($('#tTotal')) $('#tTotal').textContent = nf.format(groups.reduce((a, g) => a + (g.saldo || 0), 0));
-  $('#count').innerHTML = `<b>${nf.format(groups.length)}</b> filas`;
+  const nPend = groups.filter(g => g.pend).length;
+  $('#count').innerHTML = `<b>${nf.format(groups.length)}</b> bienes · <b>${nf.format(nPend)}</b> con transferencia pendiente de recepción`;
 }
 $('#q').addEventListener('input', e => { state.q = e.target.value; update(); });
 
@@ -999,9 +1025,10 @@ function renderStatus(nTable, nRows) {
   if (state.q.trim())   tags.push({ k: 'q',     t: `Búsqueda: “${state.q.trim()}”` });
 
   $('#status').innerHTML = tags.length
-    ? `<span>Mostrando <b>${nf.format(nRows)}</b> de ${nf.format(ROWS.length)} movimientos</span>` +
+    ? `<span>Mostrando <b>${nf.format(nRows)}</b> de ${nf.format(computeStock().length)} bienes en stock</span>` +
       tags.map(t => `<span class="tag"><span>${esc(t.t)}</span><button type="button" data-k="${t.k}" aria-label="Quitar filtro">${ICON_X}</button></span>`).join('')
-    : `<span>Sin filtros: viendo los <b>${nf.format(ROWS.length)}</b> movimientos</span>`;
+    : `<span>Sin filtros: viendo los <b>${nf.format(computeStock().length)}</b> bienes en stock</span>` +
+      (_sinPositivo.length ? `<span class="tag"><span title="${esc(_sinPositivo.map(x => x.notros).join(', '))}">${_sinPositivo.length} bien(es) sin movimiento positivo: no figuran en stock (revisar)</span></span>` : '');
 
   const btn = $('#clearBtn');
   btn.disabled = !tags.length; btn.classList.toggle('has', tags.length > 0);
